@@ -1,5 +1,13 @@
 import { Direction, Position, Difficulty, Command } from '../types';
-import { DIRECTION_VECTORS, GRID_SIZE, DIFFICULTY_SETTINGS, OBSTACLE_COUNT, STARTING_POSITIONS } from '../constants';
+import {
+  DIRECTION_VECTORS,
+  GRID_SIZE,
+  DIFFICULTY_SETTINGS,
+  OBSTACLE_COUNT,
+  STARTING_POSITIONS,
+  MAX_PATHFINDING_ATTEMPTS,
+  MAX_OBSTACLE_PLACEMENT_ATTEMPTS,
+} from '../constants';
 
 // Calculate Manhattan distance between two positions
 export const getManhattanDistance = (pos1: Position, pos2: Position): number => {
@@ -51,9 +59,8 @@ export const generateGoalPosition = (
   obstacles: Position[]
 ): Position => {
   const { min, max } = DIFFICULTY_SETTINGS[difficulty];
-  let goalPos: Position;
+  let goalPos: Position = { x: -1, y: -1 };
   let attempts = 0;
-  const maxAttempts = 100;
 
   do {
     goalPos = getRandomPosition();
@@ -63,8 +70,12 @@ export const generateGoalPosition = (
     hasObstacle(goalPos, obstacles) ||
     getManhattanDistance(startPos, goalPos) < min ||
     getManhattanDistance(startPos, goalPos) > max) &&
-    attempts < maxAttempts
+    attempts < MAX_PATHFINDING_ATTEMPTS
   );
+
+  if (attempts >= MAX_PATHFINDING_ATTEMPTS) {
+    console.warn('Goal position generation failed to find valid position after max attempts');
+  }
 
   return goalPos;
 };
@@ -77,23 +88,23 @@ export const generateObstacles = (
   const { min, max } = OBSTACLE_COUNT[difficulty];
   const obstacleCount = Math.floor(Math.random() * (max - min + 1)) + min;
   const obstacles: Position[] = [];
+  const maxCells = GRID_SIZE * GRID_SIZE;
+  const availableCells = maxCells - 1; // Exclude start position
 
-  for (let i = 0; i < obstacleCount; i++) {
+  for (let i = 0; i < obstacleCount && obstacles.length < availableCells; i++) {
     let obstaclePos: Position;
     let validPosition = false;
     let attempts = 0;
-    const maxAttempts = 50;
 
-    while (!validPosition && attempts < maxAttempts) {
+    while (!validPosition && attempts < MAX_OBSTACLE_PLACEMENT_ATTEMPTS) {
       obstaclePos = getRandomPosition();
-      
-      // Don't place obstacles on the start position or existing obstacles
-      if (!isSamePosition(obstaclePos, startPos) && 
+
+      if (!isSamePosition(obstaclePos, startPos) &&
           !obstacles.some(obs => isSamePosition(obs, obstaclePos))) {
         obstacles.push(obstaclePos);
         validPosition = true;
       }
-      
+
       attempts++;
     }
   }

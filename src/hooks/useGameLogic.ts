@@ -1,6 +1,12 @@
 import { useState, useCallback, useEffect } from 'react';
-import { 
-  Animal, Command, Difficulty, Direction, GameState, Position, PlayerState 
+import {
+  Animal,
+  Command,
+  Difficulty,
+  Direction,
+  GameState,
+  Position,
+  PlayerState,
 } from '../types';
 import {
   generateGoalPosition,
@@ -10,10 +16,15 @@ import {
   hasValidPath,
   isWithinGrid,
   isSamePosition,
-  processCommand
+  processCommand,
 } from '../utils';
-import { GRID_SIZE } from '../constants';
-import { useSound, SOUND_URLS } from './useSound';
+import {
+  GRID_SIZE,
+  SOUND_URLS,
+  MAX_COMMAND_QUEUE,
+  MAX_PATHFINDING_ATTEMPTS,
+} from '../constants';
+import { useSound } from './useSound';
 
 export const useGameLogic = () => {
   const [gameState, setGameState] = useState<GameState>(() => {
@@ -54,22 +65,29 @@ export const useGameLogic = () => {
 
   const queueCommand = useCallback((command: Command | string) => {
     if (gameState.isExecuting || gameState.isCompleted || gameState.isGameOver) return;
-    
+
     setGameState(prev => {
       if (typeof command === 'string' && command.startsWith('removeAt')) {
         const index = parseInt(command.slice(8));
-        return {
-          ...prev,
-          commandQueue: prev.commandQueue.filter((_, i) => i !== index)
-        };
+        if (index >= 0 && index < prev.commandQueue.length) {
+          return {
+            ...prev,
+            commandQueue: prev.commandQueue.filter((_, i) => i !== index),
+          };
+        }
+        return prev;
       }
-      
+
+      if (prev.commandQueue.length >= MAX_COMMAND_QUEUE) {
+        return prev;
+      }
+
       return {
         ...prev,
         commandQueue: [...prev.commandQueue, command as Command],
       };
     });
-    
+
     playSound('pop');
   }, [gameState.isExecuting, gameState.isCompleted, gameState.isGameOver, playSound]);
 
@@ -90,50 +108,66 @@ export const useGameLogic = () => {
     resetGame(difficulty, gameState.player.animal);
   }, [gameState.isExecuting, gameState.player.animal]);
 
-  const resetGame = useCallback((difficulty: Difficulty, animal: Animal) => {
-    const startPosition = getRandomStartingPosition();
-    let obstacles = generateObstacles(startPosition, difficulty);
-    let goalPosition = generateGoalPosition(startPosition, difficulty, obstacles);
-    
-    let attempts = 0;
-    const maxAttempts = 20;
-    
-    while (!hasValidPath(startPosition, goalPosition, obstacles) && attempts < maxAttempts) {
-      obstacles = generateObstacles(startPosition, difficulty);
-      goalPosition = generateGoalPosition(startPosition, difficulty, obstacles);
-      attempts++;
-    }
-    
-    setGameState({
-      player: {
-        position: { ...startPosition },
-        direction: 'right',
-        animal,
-      },
-      startPosition,
-      goalPosition,
-      obstacles,
-      commandQueue: [],
-      difficulty,
-      isExecuting: false,
-      isCompleted: false,
-      isGameOver: false,
-      gridSize: GRID_SIZE,
-      path: [startPosition],
-    });
-    
-    playSound('swoosh');
-  }, [playSound]);
+  const resetGame = useCallback(
+    (difficulty: Difficulty, animal: Animal) => {
+      const startPosition = getRandomStartingPosition();
+      let obstacles = generateObstacles(startPosition, difficulty);
+      let goalPosition = generateGoalPosition(startPosition, difficulty, obstacles);
+
+      let attempts = 0;
+      const maxAttempts = MAX_PATHFINDING_ATTEMPTS;
+
+      while (
+        !hasValidPath(startPosition, goalPosition, obstacles) &&
+        attempts < maxAttempts
+      ) {
+        obstacles = generateObstacles(startPosition, difficulty);
+        goalPosition = generateGoalPosition(startPosition, difficulty, obstacles);
+        attempts++;
+      }
+
+      if (attempts >= maxAttempts) {
+        console.warn(
+          'Level generation failed to create valid path after max attempts'
+        );
+      }
+
+      setGameState({
+        player: {
+          position: { ...startPosition },
+          direction: 'right',
+          animal,
+        },
+        startPosition,
+        goalPosition,
+        obstacles,
+        commandQueue: [],
+        difficulty,
+        isExecuting: false,
+        isCompleted: false,
+        isGameOver: false,
+        gridSize: GRID_SIZE,
+        path: [startPosition],
+      });
+
+      playSound('swoosh');
+    },
+    [playSound]
+  );
 
   const executeCommands = useCallback(async () => {
-    if (gameState.isExecuting || gameState.commandQueue.length === 0) return;
-    
-    setGameState(prev => ({ ...prev, isExecuting: true }));
+    setGameState(prev => {
+      if (prev.isExecuting || prev.commandQueue.length === 0) {
+        return prev;
+      }
+      return { ...prev, isExecuting: true };
+    });
+
     playSound('whoop');
-    
-    for (let i = 0; i < gameState.commandQueue.length; i++) {
-      if (gameState.isCompleted || gameState.isGameOver) break;
-      
+
+    const queueSnapshot = gameState.commandQueue;
+
+    for (let i = 0; i < queueSnapshot.length; i++) {
       await new Promise<void>(resolve => {
         setTimeout(() => {
           setGameState(prev => {
@@ -141,13 +175,13 @@ export const useGameLogic = () => {
               return prev;
             }
 
-            const command = prev.commandQueue[i];
+            const command = queueSnapshot[i];
             const { position: newPos, direction: newDir } = processCommand(
               prev.player.position,
               prev.player.direction,
               command
             );
-            
+
             if (!isWithinGrid(newPos) || hasObstacle(newPos, prev.obstacles)) {
               playSound('bonk');
               return {
@@ -157,7 +191,7 @@ export const useGameLogic = () => {
                 commandQueue: [],
               };
             }
-            
+
             const reachedGoal = isSamePosition(newPos, prev.goalPosition);
             if (reachedGoal) {
               playSound('tada');
@@ -173,8 +207,8 @@ export const useGameLogic = () => {
                 isExecuting: false,
               };
             }
-            
-            if (i === prev.commandQueue.length - 1 && !reachedGoal) {
+
+            if (i === queueSnapshot.length - 1 && !reachedGoal) {
               return {
                 ...prev,
                 player: {
@@ -187,7 +221,7 @@ export const useGameLogic = () => {
                 isExecuting: false,
               };
             }
-            
+
             return {
               ...prev,
               player: {
@@ -198,20 +232,14 @@ export const useGameLogic = () => {
               path: [...prev.path, newPos],
             };
           });
-          
+
           resolve();
         }, 500);
       });
     }
-    
+
     setGameState(prev => ({ ...prev, isExecuting: false }));
-  }, [
-    gameState.isExecuting,
-    gameState.commandQueue.length,
-    gameState.isCompleted,
-    gameState.isGameOver,
-    playSound
-  ]);
+  }, [gameState.commandQueue, playSound]);
 
   return {
     gameState,

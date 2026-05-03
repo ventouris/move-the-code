@@ -1,12 +1,20 @@
 import React from 'react';
-import { GridCellProps, Direction, Animal } from '../types';
+import { GridCellProps } from '../types';
 import { ANIMAL_EMOJIS } from '../constants';
 
-const getInitialDirection = (position: { x: number; y: number }): string => {
-   // if (position.x === 0) return '-scale-x-100'; // Face right
-   // if (position.x === 7) return 'rotate-0'; // Face left
-   // if (position.y === 0) return '-scale-x-100'; // Face down
-  return '-scale-x-100'; // Face up (bottom row)
+const getDirectionTransform = (direction: string): string => {
+  switch (direction) {
+    case 'up':
+      return 'rotate(0deg)';
+    case 'down':
+      return 'rotate(180deg)';
+    case 'left':
+      return 'scaleX(-1)';
+    case 'right':
+      return 'scaleX(1)';
+    default:
+      return 'rotate(0deg)';
+  }
 };
 
 const GridCell: React.FC<GridCellProps> = ({
@@ -41,15 +49,11 @@ const GridCell: React.FC<GridCellProps> = ({
       
       {hasPlayer && (
         <div
-          className={`
-            text-2xl
-            transition-all duration-300 ease-in-out transform
-            ${isStart ? getInitialDirection({ x: 0, y: 0 }) : ''}
-            ${isGameOver ? 'animate-[spin_1s_ease-in-out_infinite]' : ''}
-          `}
+          className={`text-2xl transition-transform duration-300 ${
+            isGameOver ? 'animate-[spin_1s_ease-in-out_infinite]' : ''
+          }`}
           style={{
-            transform: `translate(0, 0) ${isStart ? getInitialDirection({ x: 0, y: 0 }) : ''}`,
-            transition: 'transform 0.5s ease-in-out'
+            transform: isGameOver ? undefined : getDirectionTransform(playerDirection),
           }}
         >
           {ANIMAL_EMOJIS[animal]}

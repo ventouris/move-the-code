@@ -38,12 +38,15 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   React.useEffect(() => {
     if (isExecuting) {
       let index = 0;
+      setCurrentExecutingIndex(0);
+
       const interval = setInterval(() => {
+        index++;
         if (index < commandQueue.length) {
           setCurrentExecutingIndex(index);
-          index++;
         } else {
           clearInterval(interval);
+          setCurrentExecutingIndex(-1);
         }
       }, 500);
 
@@ -51,6 +54,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         clearInterval(interval);
         setCurrentExecutingIndex(-1);
       };
+    } else {
+      setCurrentExecutingIndex(-1);
     }
   }, [isExecuting, commandQueue.length]);
 

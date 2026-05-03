@@ -33,7 +33,7 @@ const QueueDisplay: React.FC<QueueDisplayProps> = ({
       <div className="flex flex-wrap gap-2 py-2 px-3 bg-gray-100 rounded-lg shadow-inner min-h-[3rem]">
         {commands.map((command, index) => (
           <button
-            key={`${command}-${index}`}
+            key={index}
             className={`
               w-10 h-10 rounded-lg flex items-center justify-center text-lg font-bold
               ${isExecuting && index === currentExecutingIndex ? 'bg-green-500 text-white' : 'bg-white text-blue-600'}
@@ -44,7 +44,7 @@ const QueueDisplay: React.FC<QueueDisplayProps> = ({
             `}
             onClick={() => !isExecuting && onRemoveCommand?.(index)}
             disabled={isExecuting}
-            title={isExecuting ? undefined : "Click to remove command"}
+            title={isExecuting ? undefined : 'Click to remove command'}
           >
             {COMMAND_ICONS[command]}
           </button>
